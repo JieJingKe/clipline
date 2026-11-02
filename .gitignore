@@ -1,0 +1,13 @@
+# .NET
+bin/
+obj/
+*.user
+.vs/
+.idea/
+
+# 运行期产物（日志、引导标记、语言设置都在 %TEMP% / %LOCALAPPDATA%，仓库里不该出现）
+*.log
+
+# OS
+Thumbs.db
+.DS_Store
