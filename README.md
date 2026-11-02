@@ -39,7 +39,11 @@
 
 ## 上手 · Get started
 
-需要 Windows 10 / 11 与 .NET 10 桌面运行时（或直接用发布产物）。
+**最省事的方式：下载 [Latest release](https://github.com/JieJingKe/clipline/releases/latest) 里的 `Clipline-0.1.0-win-x64.zip`，解压后双击 `CliplineSpike.exe`。** 免安装、不解绑任何系统设置，不想要了直接把文件夹删掉。它是未签名的早期版本，Windows 可能提示"未知发布者"。
+
+**The short path: download `Clipline-0.1.0-win-x64.zip` from [Latest release](https://github.com/JieJingKe/clipline/releases/latest), unzip it and run `CliplineSpike.exe`.** Nothing is installed and nothing touches system settings — delete the folder when you're done. It's an unsigned early build, so Windows may warn about an unknown publisher.
+
+想从源码跑（需要 Windows 10 / 11 与 .NET 10 桌面运行时）：
 
 ```sh
 git clone https://github.com/JieJingKe/clipline.git
