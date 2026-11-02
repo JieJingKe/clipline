@@ -25,6 +25,7 @@ cd spike/SpikeLine
 ./bin/Debug/net10.0-windows/CliplineSpike.exe --copy-text "任意文本" [--with-ignore] [--history-opt-out]  # 辅助进程：模拟外部程序复制
 ./bin/Debug/net10.0-windows/CliplineSpike.exe --paste-gate  # G3-a 半自动：点一下探针输入框，剩下的自动注入并比对
 ./bin/Debug/net10.0-windows/CliplineSpike.exe --render-preview C:\path\preview.png  # 离屏把绳/绳头画成 PNG，用来看观感
+./bin/Debug/net10.0-windows/CliplineSpike.exe --lang en --render-preview ...         # 只改这次运行的语言（不落盘），用来出中英各一张自检图
 ```
 
 快捷键：`Ctrl+Alt+T` 开关绳子；`Ctrl+Alt+L` 运行时开关顶边下拉绳（与托盘菜单里的"显示下拉绳"同一条开关）；`Ctrl+Alt+Shift+Q` 退出。
@@ -33,7 +34,7 @@ cd spike/SpikeLine
 首次引导气泡：删掉 `%LOCALAPPDATA%\CliplineSpike\onboarded.flag` 即可重看。
 
 日志：`%TEMP%\clipline-spike.log`（每个动作都记录前台窗口，用于判定焦点是否被抢）。
-绳子上的样例内容：三张**操作提示卡**（`T-1` 单击复制剪贴板 / `T-2` 双击直接粘贴到当前光标处 / `T-3` 拖动图片直接快速粘贴）+ 一张启动时现生成的图片卡 `I-1`。提示卡就是首次使用时该看见的东西，不再拿门禁说明文字当装饰。
+绳子上的样例内容：四张**操作提示卡**（`T-1` 滚轮翻看更早的便签 / `T-2` 单击复制剪贴板 / `T-3` 双击直接粘贴到当前光标处 / `T-4` 拖动图片直接快速粘贴）+ 一张启动时现生成的图片卡 `I-1`。提示卡就是首次使用时该看见的东西，不再拿门禁说明文字当装饰；滚动那条挂最左（它讲的正是"绳两头之外还有"），"拖动图片"紧挨着能拖的那张卡。
 
 ## 手动清单（逐项打勾）
 
@@ -52,6 +53,7 @@ cd spike/SpikeLine
 - [ ] **G4-d** 第一次成功展开后气泡永久消失（`%LOCALAPPDATA%\CliplineSpike\onboarded.flag` 出现）；想看第二次就删掉这个文件
 - [ ] **G4-e** `Ctrl+Alt+L` 实时开关细线，对比"有锚点/无锚点"两种手感
 - [x] **G4-f** ~~线比绳短~~ **已修**：触发区/细线/绳子共用 `Zone.ForMonitor(..., minWidthDip)`，日志 `anchorWidth=944 ropeWidth=944 match=True`；卡片变多时线一起变长
+- [ ] **G4-g** 复制到第 7 张（本机绳宽装得下 6 张）→ 最新一张仍完整挂在绳上、看得见；**滚轮在绳子上滚动** → 更早的便签从左侧拉回来，淡出绳外的那张点不到（收起再展开回到最新）。自动部分已验（`--selftest cards=12 visible=6` + 截图），**滚轮手感需人工**
 - [x] **G5-a** 外部进程复制 → 绳子最左边自动挂上新卡片：`R7 captured Text text[1937634860+len19] owner=none total=1`（自动，无需人工）
 - [x] **G5-b** 再复制同一段内容 → `R7 duplicate skipped`，不重复挂：`duplicates=1`
 - [ ] **G5-c** 复制一张截图（`Win+Shift+S` 或 Snipaste 存剪贴板）→ 挂出图片卡，可拖出为 `.png`（**仍需人工**：spike 的图片入绳路径已实现并有单测级证据，但真实截图工具行为矩阵属 R3）
@@ -80,16 +82,17 @@ cd spike/SpikeLine
 | 语言（中英文切换） | 用户可见文案全部收进 `Strings.cs` 的一张 `key → [zh, en]` 表（`Lang.T` / `Lang.Format`），日志与命令行参数**故意不进表**（那是给开发者看的，不该被语言开关影响）。切换走托盘菜单两个带勾选的菜单项，`Lang.Set` 触发 `Changed` 事件 → 卡片文字、右键菜单、引导气泡、托盘提示一起刷新；绳子宽度按固定卡片宽度算，所以换语言不需要重量绳子。默认值跟随 `CultureInfo.CurrentUICulture`，用户改过一次就落盘。实测 `language=Zh (inferred from UI culture zh; no setting file yet)` / `language=En (from …\language.txt)`，`--render-preview` 双语出图英文最长两句在 200 DIP 卡内两行放得下 |
 | 锚点素材接入 | 用户给的 `<path d="…">` 直接喂 `Geometry.Parse`（WPF path mini-language），`Stretch=Uniform` 缩到 34×50 DIP，**没引任何 SVG 库**。SVG 默认 nonzero 填充、WPF 解析出 EvenOdd，正好把绳圈内孔挖掉，观感正确。实测 `physical=(2046,0,68x100) ratio=0.67 interactive=True` |
 | 直贴注入（G3-a） | 根因是 `INPUT` 结构体只有 32 字节（`InputUnion` 里缺 `MOUSEINPUT`），`cbSize` 与系统期望的 40 不符 → `SendInput` 返回 0、`lastError=87`，**看起来像权限问题其实不是**。补齐后 `sizeofINPUT=40 accepted=4 lastError=0`。跨进程自动化卡在 Windows 前台锁（后台进程 `SetForegroundWindow`/`SwitchToThisWindow` 均失败，`acquired=False`），所以这条降级为半自动 `--paste-gate`；产品路径不受影响：用户双击卡片时目标应用本来就是前台。**已用户实测通过** |
-| 触发区与绳宽解耦（G4-f） | 用户反馈"只有 1–2 张卡片时能触发的横向长度太短，卡片多了又太长"→ `Zone` 拆成两个函数：`Zone.Trigger(monitor, scale)` = **恒定工作区中间 1/3**（上限 900 DIP），`Zone.Span(monitor, scale, minWidthDip)` = 绳子本体宽度（`min(工作区×0.4, 900)`，不小于全部卡片所需，最宽不超工作区）。实测 3 张卡时 `window=(428,-181,704x180)`（绳宽 704 DIP）而 `triggerZone=(1040..2080)` 物理像素 = 3120 的中间 1/3，两者不再联动；`RopeChanged` 事件随之删除（锚点位置不再需要跟随绳宽重排） |
-| 剪贴板监听（G5） | **全绿**：`R7 clipboard listener attached=True lastError=0`，六条断言由 `--selftest` 自动验证（2026-11-02 08:54，改锚点/卡片视觉后 09:23 复跑仍 `PASS`，11:41 换提示卡文案 + 加双语后再次 `PASS`）：`captures=10 rejections=2 selfWrites=1 duplicates=1 staleSkips=1 evictions=2 cards=12`，`RESULT PASS`。拦截原因两条分别是 `Clipboard Viewer Ignore` 与 `CanIncludeInClipboardHistory=0` |
+| 触发区与绳宽解耦（G4-f） | 用户反馈"只有 1–2 张卡片时能触发的横向长度太短，卡片多了又太长"→ `Zone` 拆成两个函数：`Zone.Trigger(monitor, scale)` = **恒定工作区中间 1/3**（上限 900 DIP），`Zone.Span(monitor, scale, minWidthDip)` = 绳子本体宽度（`min(工作区×0.4, 900)` 起步，随卡片加宽，但封顶在屏幕装得下的张数，见下面「溢出与沿绳滚动」）。实测 3 张卡时 `window=(428,-181,704x180)`（绳宽 704 DIP）而 `triggerZone=(1040..2080)` 物理像素 = 3120 的中间 1/3，两者不再联动；`RopeChanged` 事件随之删除（锚点位置不再需要跟随绳宽重排） |
+| 剪贴板监听（G5） | **全绿**：`R7 clipboard listener attached=True lastError=0`，六条断言由 `--selftest` 自动验证（2026-11-02 08:54，改锚点/卡片视觉后 09:23 复跑仍 `PASS`，11:41 换提示卡文案 + 加双语后再次 `PASS`，14:51 修完"卡片溢出绳外看不见"后仍 `PASS`，15:47 加第五张提示卡 + `--lang` 后复跑 `PASS`，并新增 `visible=6`）：`captures=10 rejections=2 selfWrites=1 duplicates=1 staleSkips=1 evictions=3 cards=12 visible=6`，`RESULT PASS`。拦截原因两条分别是 `Clipboard Viewer Ignore` 与 `CanIncludeInClipboardHistory=0` |
 | 全局热键 | `RegisterHotKey` 首次 `True`；**第二个实例返回 `False`** → 证实必须单实例守卫（已加 Mutex） |
 | 展开/收起 | 状态机与动画在 900ms 节奏下正常：`reveal → open=True → retract → open=False`，进程干净退出 |
 | 卡片观感（R8/R4） | 四条按用户反馈修正：① **图文同宽** —— 原来文字卡 320、图片卡 200，统一成 `LineWindow.CardWidth = 200`；② **底色换牛皮纸** —— 半透明白玻璃 + 纯白字在浅色桌面上完全看不清，改成牛皮纸渐变 + 墨色字 `#332211`；③ **牛皮纸再提亮一档**（用户："有些深"）—— `#FDF7EA → #F8EFDA → #F1E2C4`（约 97% 不透明），边线 `#C9AE86`，投影不透明度 0.4 → 0.28；④ **夹子换成用户提供的晾衣夹 SVG**，银色线性渐变 `#FFFFFF → #D6DDE4 → #B9C2CC → #EDF1F5` + 淡灰描边做出金属反光，34×21.5 DIP 横跨绳线（两段 path 合并成一个 `Geometry`，靠 EvenOdd 挖出内框和两颗铆钉孔），并按用户反馈把重叠从 ~59% 压到**只有夹子下缘 1/4 高度压在便签上**（`Margin.Top = -PinHeight × 0.75`，夹口正好咬在绳线上）。配色与夹子几何收在 `KraftPaper` / `CardView.BuildClothespin` 一处，卡片本体和 `--render-preview` 共用，不会走样 |
 | 新增方向（R7） | 用户要求"最新的放在最右边"：`Hang()` 由 `_cards.Insert(0, …)` 改成 `_cards.Add(…)`，LRU 淘汰从 `_cards[^1]` 改成 `_cards[0]`（最左=最旧）。这也让 §3 的去重规则（"重复项滑到最右"）和新增方向一致，不再互相矛盾 |
-| 视觉自检 | `--render-preview out.png` 离屏 2× 渲染"收起态（白线 + 2/3 处拉绳锚点）"和"展开态（白线 + 三张牛皮纸提示便签 + 金属银夹）"，背景从左到右由白渐变到深灰，一张图同时检查两种桌面；改文案/换语言时先按 `language.txt` 出中、英各一张自看，再麻烦用户，省一轮往返 |
+| 溢出与沿绳滚动（R7 / G4-g） | 用户报"便签一直在右侧新增，但桌面上看不到了"。根因：`Zone.Span` 把绳宽夹回工作区内，`Layout()` 却按**全部**卡片排布，12 张需要 2684 DIP > 绳宽 1536 DIP，最新（最右）几张直接排到窗口外被裁掉。改成蓝本 Tendedero 的两段式：`CapacityDip()` 先算屏幕装得下几张（本机 6），绳宽只长到这个张数；`PlaceCards()` 把最新一张钉在"满绳最后一格"，更旧的往左排到绳外，`PreviewMouseWheel` 沿绳滑动（一格半卡宽 /  notch，夹在 `(count − visible) × step`，收起归零），出绳的卡片按 90 DIP 渐隐且 `IsHitTestVisible=false`。**实测**：`--selftest` `cards=12 visible=6`，截图确认 6 张铺满绳、最新一张完整可见、旧的整齐排在左端之外。**滚轮手势待用户手测** —— 脚本 `PostMessage(WM_MOUSEWHEEL)` 打不进 WPF 的轮子路由（WPF 按真实指针位置命中，不按消息 lParam），这条和 G1/G3 一样归手动门禁 |
+| 视觉自检 | `--render-preview out.png` 离屏 2× 渲染"收起态（白线 + 2/3 处拉绳锚点）"和"展开态（白线 + 四张牛皮纸提示便签 + 金属银夹）"，背景从左到右由白渐变到深灰，一张图同时检查两种桌面；改文案/换语言用 `--lang en`（只改这次运行、不落盘）出中、英各一张自看，再麻烦用户，省一轮往返 |
 | 内存 | WPF 基线 + 一张 `RenderTargetBitmap` 样例图 → WorkingSet **171MB**，远超 80MB 预算。需要在 M1 前判断：是 `DropShadowEffect`（位图缓存）贵，还是 WPF 基线本身就高 |
 
-### Spike 期间发现并修掉的 10 个真实 bug
+### Spike 期间发现并修掉的 11 个真实 bug
 
 1. `MONITORINFOEX` 用 ANSI 封送，`GetMonitorInfo` 静默失败返回全 0 → 窗口坐标算成 `(-120,-181)`。修：结构体标 `CharSet.Unicode`。
 2. `DependencyProperty.Register` 写在实例字段初始化里，第二个卡片就抛异常 → 进程启动即崩。修：改静态字段。
@@ -100,7 +103,8 @@ cd spike/SpikeLine
 7. **批量复制会塌成一次捕获**（真实产品缺陷，不是测试瑕疵）：第一轮 selftest 连发 9 次复制，结果 `captures=2 duplicates=9`。根因是我在 UI 线程 `Thread.Sleep` 做节流，9 条 `WM_CLIPBOARDUPDATE` 在队列里堆积，等 UI 空闲时剪贴板内容早已是最后一条 —— 前 8 次读到的都是同一份文本。修：用 `GetClipboardSequenceNumber()` 做**陈旧通知判定**（`staleSkips`），并把写者改成每次 tick 只派一个、绝不阻塞 UI。生产必须保留这个序列号闸门。
 8. **双击直贴一直"没反应"，被误判成需要管理员权限**：日志 `SendInput(Ctrl+V) requested=4 accepted=0 lastError=87`。真实原因是 `INPUT` 结构体封送成 32 字节 —— `InputUnion` 里只放了 `KEYBDINPUT`，而 x64 上 `INPUT` = 类型(4) + 补齐(4) + `MOUSEINPUT`(32) = **40 字节**，`cbSize` 传 32 系统直接拒收。修：union 里补 `MOUSEINPUT`，并把 `sizeofINPUT` 打进日志。教训：**`accepted=0 err=87` 是参数错，不是 UIPI/权限**，别拿管理员权限当诊断手段。
 9. **`Ctrl+Alt+Shift+Q` 退出只关了绳子窗口**：进程留着不退出（锚点窗、气泡窗仍是"打开"状态，`OnLastWindowClose` 不满足），exe 被占用无法重编，日志里还留下一行 `hotkey → quit` 让人以为退了。修：`QuitRequested` 事件统一走 `app.Shutdown()`。产品里这条要写成硬约束：**退出路径必须显式 shutdown，不能依赖"最后一个窗口关闭"**。
-10. **绳头加交互时命中测试写反**：`GhostWindow` 构造函数里写成 `IsHitTestVisible = ClickThrough`，于是"可点击的绳头"（`ClickThrough=false`）反而拿到 `IsHitTestVisible=false`，`OnMouseEnter`/`OnMouseLeftButtonUp` 一次都不触发 —— 现象是"鼠标放上去完全没反应"，而 exstyle 日志看起来一切正常。修：`IsHitTestVisible = !ClickThrough`。教训：**分层窗口 + WPF 命中测试是两套机制**，`WS_EX_TRANSPARENT` 只管 Win32 层，WPF 内部还有一层 `IsHitTestVisible`，两者必须同向。
+10. **绳头加交互时命中测试写反**：`GhostWindow` 构造函数里写成 `IsHitTestVisible = ClickThrough`，于是"可点击的绳头"（`ClickThrough=false`）反而拿到 `IsHitTestVisible=false`，`OnMouseEnter`/`OnLeftButtonUp` 一次都不触发 —— 现象是"鼠标放上去完全没反应"，而 exstyle 日志看起来一切正常。修：`IsHitTestVisible = !ClickThrough`。教训：**分层窗口 + WPF 命中测试是两套机制**，`WS_EX_TRANSPARENT` 只管 Win32 层，WPF 内部还有一层 `IsHitTestVisible`，两者必须同向。
+11. **卡片被排到窗口外面，最新的反而看不见**（用户 11-02 报）：绳宽由 `Zone.Span` 算，里面 `Math.Clamp(..., workWidthDip - 24)` 把窗口夹回工作区；而 `Layout()` 用**全部**卡片所需宽度（12 张 = 2684 DIP）当 `minWidthDip` 去排布，窗口只有 1536 DIP，于是第 7 张之后统统落在窗口右边界之外被裁掉 —— 卡片一直在正常新增，只是永远画在看不见的地方。修：容量与排布共用同一个算法（`CapacityDip()` 先定"装得下几张"，绳宽按它长，多出来的挂左端绳外 + 滚轮取回）。教训：**同一份几何不许两处各算各的**，夹宽度的人和排卡片的人必须引用同一个张数。
 
 ### G5 曾被本机剪贴板"锁死"阻塞（次日自愈，已复验）
 
@@ -129,4 +133,5 @@ PowerShell `Set-Clipboard` / `Get-Clipboard` 同样失败，`GetClipboardOwner()
 - 全屏抑制靠"前台窗口覆盖整个显示器 + 进程名不是 explorer/mstsc"，是启发式，需要实测收敛（R5）。
 - `DllImport` 而非 DESIGN 规定的 `[LibraryImport]`：spike 少一层 unsafe，生产代码统一改回。
 - 语言只有中英两门，且是一整张硬编码表（`Strings.cs`）+ 一个落盘开关；生产按 DESIGN §6 换成 `.resw` 卫星资源，并把西/日补齐。设置仍只有"语言"和"下拉绳显不显示"两项，没有设置窗口。
+- 滚轮沿绳滑动只在**绳子展开时**生效，代价是绳带那一条（约 180 DIP 高）内的滚轮被我们吃掉、不再滚下面的页面；收起状态窗口在屏幕外，不影响任何页面滚动。生产要收敛成"指针在卡片带上才接管"，或者换成拖拽/横向滑动（DESIGN §7.3）。
 - 无撤销栈（`Ctrl+Z`）。

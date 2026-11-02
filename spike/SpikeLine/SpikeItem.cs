@@ -38,22 +38,29 @@ internal static class SpikeSamples
         var image = WriteSamplePng();
         return
         [
+            // 滚动提示挂最左：它讲的是"绳两头之外还有"，正好指着这一排被挤出绳外的方向。
             new SpikeItem
             {
                 Kind = SpikeKind.Text,
                 Label = "T-1",
-                TextKey = "hint.click",
+                TextKey = "hint.scroll",
             },
             new SpikeItem
             {
                 Kind = SpikeKind.Text,
                 Label = "T-2",
-                TextKey = "hint.doubleClick",
+                TextKey = "hint.click",
             },
             new SpikeItem
             {
                 Kind = SpikeKind.Text,
                 Label = "T-3",
+                TextKey = "hint.doubleClick",
+            },
+            new SpikeItem
+            {
+                Kind = SpikeKind.Text,
+                Label = "T-4",
                 TextKey = "hint.dragImage",
             },
             // 图片卡挂最右：既守住"最新在右"的方向，也让"拖动图片"这条提示紧挨着能拖的那张卡。

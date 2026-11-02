@@ -11,6 +11,7 @@
 ## 它能干什么 · What it does
 
 - **复制即上绳** —— 你在任何应用里 `Ctrl+C` 的内容，自动挂上绳子，最新的一张在最右边
+- **滚动看更早的** —— 绳装不下的便签挂在绳外，滚轮一拉就回来
 - **单击卡片** —— 重新复制到剪贴板，焦点仍然留在你原来的应用里，光标不会跳走
 - **双击卡片** —— 直接粘贴到当前光标处，不用再按一次 `Ctrl+V`
 - **拖动图片** —— 把图片卡拖进聊天窗、文件夹或桌面，直接发送
@@ -19,6 +20,7 @@
 - **中文 / English** —— 托盘菜单里一键切换，选择会记住
 
 - **Copies hang themselves** —— anything you copy in any app appears on the line, newest on the right
+- **Scroll for older notes** —— whatever doesn't fit hangs off the end of the rope; the wheel pulls it back
 - **Click a card** —— copies it back to your clipboard, focus stays exactly where it was
 - **Double-click a card** —— pastes straight at your cursor, no second keystroke
 - **Drag an image out** —— drop it into a chat window, a folder or the desktop

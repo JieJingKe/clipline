@@ -32,6 +32,7 @@ internal static class Lang
         ["hint.click"] = ["单击复制剪贴板", "Click to copy to the clipboard"],
         ["hint.doubleClick"] = ["双击直接粘贴到当前光标处", "Double-click to paste at the cursor"],
         ["hint.dragImage"] = ["拖动图片直接快速粘贴", "Drag an image to drop it straight in"],
+        ["hint.scroll"] = ["滚轮翻看更早的便签", "Scroll to reach older notes"],
     };
 
     public static AppLanguage Current { get; private set; } = Load();
@@ -41,6 +42,13 @@ internal static class Lang
     public static string T(string key) => Table[key][(int)Current];
 
     public static string Format(string key, params object[] args) => string.Format(T(key), args);
+
+    /// <summary>只改这一次运行的语言、不落盘：给 <c>--lang</c> 出图自检用，不该覆盖用户托盘里的选择。</summary>
+    public static void Preview(AppLanguage language)
+    {
+        Current = language;
+        Log.Write($"language preview={language} (not persisted)");
+    }
 
     public static void Set(AppLanguage language)
     {

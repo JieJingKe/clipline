@@ -23,6 +23,12 @@ internal static class Program
             return RunPasteProbe();
         }
 
+        // 出图自检要中英各来一张，但绝不能顺手改掉用户自己的语言选择，所以只在这次运行里生效。
+        if (GetValue(args, "--lang") is { } lang && Enum.TryParse<AppLanguage>(lang, true, out var previewLanguage))
+        {
+            Lang.Preview(previewLanguage);
+        }
+
         if (args.Contains("--render-preview"))
         {
             return RunRenderPreview(GetValue(args, "--render-preview"));
@@ -249,7 +255,7 @@ internal static class Program
     {
         _ = new Application();
         var target = outputPath ?? System.IO.Path.Combine(System.IO.Path.GetTempPath(), "clipline-preview.png");
-        const double sceneWidth = 780;
+        const double sceneWidth = 980;
         const double sceneHeight = 300;
 
         var background = new System.Windows.Media.LinearGradientBrush { StartPoint = new Point(0, 0), EndPoint = new Point(1, 0) };
@@ -314,11 +320,12 @@ internal static class Program
             StrokeThickness = 1.1,
         }, 20 + ((sceneWidth - 40) * AnchorLine.AnchorRatio) - (AnchorLine.CordWidthDip / 2), 16);
 
-        // 展开态：白线 + 三张牛皮纸便签（图文同宽，最新的一张挂最右），这里直接画真实首屏的三句提示
+        // 展开态：白线 + 四张牛皮纸便签（图文同宽，最新的一张挂最右），这里直接画真实首屏的四句提示
         AddLine(118);
-        AddCard(60, 120, Lang.T("hint.click"), false);
-        AddCard(280, 120, Lang.T("hint.doubleClick"), false);
-        AddCard(500, 120, Lang.T("hint.dragImage"), false);
+        AddCard(60, 120, Lang.T("hint.scroll"), false);
+        AddCard(280, 120, Lang.T("hint.click"), false);
+        AddCard(500, 120, Lang.T("hint.doubleClick"), false);
+        AddCard(720, 120, Lang.T("hint.dragImage"), false);
 
         canvas.Measure(new Size(sceneWidth, sceneHeight));
         canvas.Arrange(new Rect(0, 0, sceneWidth, sceneHeight));
@@ -536,7 +543,7 @@ internal static class Program
                         ? "BLOCKED（本机剪贴板被其他进程锁死，非代码问题：重启或注销后重跑）"
                         : pass ? "PASS" : "FAIL";
                     Log.Write(
-                        $"selftest RESULT {verdict} clipboardUsable={clipboardUsable} captures={watcher.Captures} rejections={watcher.Rejections} lastRejection={watcher.LastRejection} selfWrites={watcher.SelfWrites} duplicates={watcher.Duplicates} staleSkips={watcher.StaleSkips} evictions={window.Evictions} cards={window.CardCount} pasteGate=manual(--paste-gate)");
+                        $"selftest RESULT {verdict} clipboardUsable={clipboardUsable} captures={watcher.Captures} rejections={watcher.Rejections} lastRejection={watcher.LastRejection} selfWrites={watcher.SelfWrites} duplicates={watcher.Duplicates} staleSkips={watcher.StaleSkips} evictions={window.Evictions} cards={window.CardCount} visible={window.VisibleCount} pasteGate=manual(--paste-gate)");
                     timer.Stop();
                     app.Shutdown();
                     break;
