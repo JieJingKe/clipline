@@ -81,6 +81,7 @@ internal static class Native
     public const long WS_EX_TRANSPARENT = 0x00000020;
 
     public const int WM_MOUSEACTIVATE = 0x0021;
+    public const int WM_MOUSEWHEEL = 0x020A;
     public const int WM_HOTKEY = 0x0312;
     public const int WM_CLIPBOARDUPDATE = 0x031D;
     public const int MA_NOACTIVATE = 0x0003;

@@ -50,6 +50,16 @@ internal static class Program
 
         var anchorEnabled = !args.Contains("--no-anchor");
         var app = new Application();
+        // 没有这层兜底，UI 线程上任何一个异常都会让进程被 CLR 直接杀掉：日志里什么都不留，
+        // 托盘与剪贴板监听也不会走正常退出路径。记下堆栈再显式 shutdown，是排查的前提。
+        app.DispatcherUnhandledException += (_, unhandled) =>
+        {
+            Log.Write($"FATAL ui exception {unhandled.Exception}");
+            unhandled.Handled = true;
+            app.Shutdown();
+        };
+        AppDomain.CurrentDomain.UnhandledException += (_, unhandled) =>
+            Log.Write($"FATAL background exception {unhandled.ExceptionObject}");
         var window = new LineWindow(SpikeSamples.Build());
         var zone = new HotZone(window);
         var anchor = new AnchorLine();

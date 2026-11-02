@@ -1,6 +1,5 @@
 using System.Windows;
 using System.Windows.Controls;
-using System.Windows.Input;
 using System.Windows.Interop;
 using System.Windows.Media;
 using System.Windows.Media.Animation;
@@ -59,7 +58,6 @@ internal sealed class LineWindow : Window
         }
 
         _watcher.Captured += Hang;
-        PreviewMouseWheel += OnWheel;
         Log.Write($"window constructed; items={_cards.Count}");
     }
 
@@ -321,6 +319,15 @@ internal sealed class LineWindow : Window
             return new IntPtr(Native.MA_NOACTIVATE);
         }
 
+        // 滚轮不进 WPF 的路由：这根绳子从不取得焦点，由窗口过程直接收 WM_MOUSEWHEEL
+        // （Windows 的"悬停滚动非活动窗口"会把它投给指针下的窗口），拿到就自己沿绳滑动。
+        if (msg == Native.WM_MOUSEWHEEL)
+        {
+            ScrollBy((short)(wParam.ToInt64() >> 16));
+            handled = true;
+            return IntPtr.Zero;
+        }
+
         if (msg == Native.WM_CLIPBOARDUPDATE)
         {
             _watcher.OnClipboardUpdate();
@@ -376,13 +383,20 @@ internal sealed class LineWindow : Window
         Canvas.SetTop(line, LineY - 6);
         _canvas.Children.Add(line);
 
+        // 挂上画布只在这里做一次；PlaceCards 只负责摆位置，滚轮每次都会调它。
+        foreach (var card in _cards)
+        {
+            _canvas.Children.Add(card);
+        }
+
         PlaceCards();
         Top = _open ? TargetTop() : HiddenTop();
     }
 
     /// <summary>
     /// 最新一张固定挂在"满绳时最后一格"的位置，旧的往左排出去；超出绳宽的那几张悬在窗外，
-    /// 由 <see cref="OnWheel"/> 沿绳拉回来。不满绳时整排居中，保持原来的观感。
+    /// 由 <see cref="ScrollBy"/> 沿绳拉回来。不满绳时整排居中，保持原来的观感。
+    /// 只摆位置、不管挂上画布 —— 滚轮会反复调用它，重复 Add 会直接崩。
     /// </summary>
     private void PlaceCards()
     {
@@ -409,13 +423,11 @@ internal sealed class LineWindow : Window
             {
                 x += Step;
             }
-
-            _canvas.Children.Add(card);
         }
     }
 
     /// <summary>滚轮沿绳滑动：上滚看旧的，下滚回到最新。和蓝本 Tendedero 的手势一致。</summary>
-    private void OnWheel(object sender, MouseWheelEventArgs e)
+    private void ScrollBy(int delta)
     {
         var most = Math.Max(0, _cards.Count - VisibleCount) * Step;
         if (!_open || most <= 0)
@@ -423,14 +435,13 @@ internal sealed class LineWindow : Window
             return;
         }
 
-        var next = Math.Clamp(_scroll + e.Delta / 120.0 * Step / 2, 0, most);
+        var next = Math.Clamp(_scroll + delta / 120.0 * Step / 2, 0, most);
         if (Math.Abs(next - _scroll) < 0.5)
         {
             return;
         }
 
         _scroll = next;
-        e.Handled = true;
         PlaceCards();
         Log.Write($"R7 scroll={_scroll:F0}/{most:F0} cards={_cards.Count} visible={VisibleCount}");
     }
