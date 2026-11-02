@@ -303,6 +303,9 @@ internal sealed class LineWindow : Window
         Log.Write($"G1 hwnd=0x{_hwnd.ToInt64():x} scale={_scale:F2} hotkey toggle={registeredToggle} quit={registeredQuit} anchor={registeredAnchor}");
 
         ParkOffscreen();
+        // 用户要求"打开软件就能看到当前剪贴板"，而不是只收启动后的新复制：
+        // 启动后立刻读一次现有内容，走和常规捕获同一条隐私闸门 + 去重路径。
+        _watcher.CaptureCurrent();
     }
 
     protected override void OnClosed(EventArgs e)

@@ -49,7 +49,8 @@
 | **（Windows 新增决策）** 卡片多于绳宽时怎么办 | **绳宽封顶 + 滚轮沿绳滑动 + 出绳渐隐且不可点**（蓝本 Tendedero 同模型：`visibleCount` 由屏宽算出，`scroll(by:)` 夹在 `(count − visibleCount) × spacing`） | 11-02 用户报"最新便签在桌面上看不见了"：绳宽被工作区上限夹回，卡片却按全量排布，最右几张排到了窗口外。只封顶不滚动=悄悄丢历史；只滚动不封顶=还是排到窗外。见 §7.3 |
 | **（Windows 新增决策）** 卡片底色 / 夹子 / 新增方向 | 牛皮纸便签**调浅**：渐变 `#FDF7EA → #F8EFDA → #F1E2C4`（约 97% 不透明）+ 墨色字 `#332211`，边线 `#C9AE86`，投影降到 0.28 不透明度；夹子换成**用户提供的晾衣夹 SVG**，用银色线性渐变（`#FFFFFF → #D6DDE4 → #B9C2CC → #EDF1F5`）做出金属银白反光，34×21.5 DIP 横跨绳线、**只让夹子下缘 1/4 高度压在便签上**（`Margin.Top = -PinHeight × 0.75`，再叠多就糊住纸面）；新复制的卡片**挂在最右边**（最新在右），超容量时挤掉最左边的旧卡片 | 第一版半透明白玻璃 + 纯白字在浅色桌面上完全看不清；改成牛皮纸后用户仍反馈"底色有些深"，故整体提亮一档。图文卡片宽度统一 200 DIP（原来文字 320 / 图片 200）。"最新在右"对齐 §3 的去重规则（重复项滑到最右）。见 R8 |
 | **（Windows 新增决策）** 首次使用的引导 | 首次成功展开之前，细绳下方显示小气泡"把鼠标移到这条线上 ↓"；一旦用户成功展开（或手动关闭）即永久消失 | 状态存 `%LOCALAPPDATA%\Clipline\onboarded.flag`，只在锚点显示时出现 |
-| **（Windows 新增决策）** 首屏就是说明书 | 绳子上最初的四张卡片直接写操作提示：**滚轮翻看更早的便签** / **单击复制剪贴板** / **双击直接粘贴到当前光标处** / **拖动图片直接快速粘贴**，再配一张真实生成的图片卡供试拖出 | 用户第一次拉起绳子时最容易"不知道能干什么"，把提示做成便签挂在绳上比弹对话框便宜，而且它本身就是卡片样式的验收样本。滚动提示挂最左（它讲的正是"两头之外还有"），"拖动图片"紧挨着能拖的那张卡，图片卡守住最右。第三条刻意只承诺图片：文字拖出实测只在接收 `CF_UNICODETEXT` 的目标里成立（编辑器 `Copy`、桌面与资源管理器 `None`），不能对全体目标许愿。见 spike/README「拖动出绳」 |
+| **（Windows 新增决策）** 首屏内容 | **启动时立刻把剪贴板里已有的文字/图片挂成第一张卡**，之后每次外部复制再往右挂；不再预置样例卡或提示卡。用户第一次拉起绳子最想看到的是"我刚复制的东西"，而不是"这个软件能干什么" | 用户 11-02 明确要求："每次打开软件后复制的内容才会放入便签中，而不是直接读取当前剪贴板的实际情况，能否调整成直接读取当前剪贴板"。启动读取与常规捕获走**同一条**隐私闸门 + 去重路径；剪贴板为空/不可读时绳子就是空的，不塞占位内容。见 §3、§7.12 |
+| **（Windows 新增决策）** 使用说明的位置 | 四条操作提示（打开绳子 / 滚轮翻看更早的便签 / 单击复制 / 双击直贴 / 拖动图片）收进托盘菜单的**"使用小 tips"**：点开在右下角弹出说明面板，点一下或 12 秒后自动收起，全程不抢焦点 | 提示卡挂在绳上会永久占掉 4 个卡片位，把用户真正需要的内容挤出屏幕；而"打开软件就看当前剪贴板"之后，绳子上第一眼应当是用户自己的内容。面板仍是非激活窗（`WS_EX_NOACTIVATE` + `MA_NOACTIVATE`），符合 R1"绝不抢焦点"。"拖动图片"那条刻意只承诺图片：文字拖出实测只在接收 `CF_UNICODETEXT` 的目标里成立（编辑器 `Copy`、桌面与资源管理器 `None`），不能对全体目标许愿。见 §7.13、spike/README「拖动出绳」 |
 | **（Windows 新增决策）** 语言 | **中文 / English** 双语，托盘菜单里两个带勾选的项直接切、立即生效不用重启；选择落盘，没有落盘值时跟随系统界面语言 | 免安装分发面向的第一批人里有英文使用者，硬编码中文等于把托盘菜单之外的一切挡在门外。实现约定见 §7.10 |
 | 单击 → 复制图片 | 单击 → 复制内容并把**前台应用还回去** | 图片：`CF_DIBV5`/PNG；文字：`CF_UNICODETEXT` |
 | 长按 → 标注 | v1：长按 → 打开系统编辑器（`mspaint.exe` / Photos）；v2：自研标注层 | 自研标注是独立子项目，不进 MVP |
@@ -81,9 +82,10 @@
   - **双击 = 复制 + 向原前台应用注入 `Ctrl+V`（默认语义，已定）**；注入失败（返回按键数 < 请求数，典型是 UIPI 权限屏障或目标不认 `Ctrl+V`）时**必须静默退化成"只复制"**并给一次轻提示，绝不出现"内容进了剪贴板但用户以为贴上了"的静默丢失
   - 右键 = 纯文本粘贴 / 保留格式粘贴 / 作为引用插入 / 删除；语义可在设置里重绑（例如 URL 项双击=用浏览器打开）
 - **去重**：与最近一项内容哈希相同则把它滑到最右，不新增卡片。
+- **启动读取**：进程启动后立即读一次剪贴板（`ClipboardWatcher.CaptureCurrent`），把现有内容当作第一张卡；先记下当前序列号，避免紧接着到达的同序号 `WM_CLIPBOARDUPDATE` 再读一遍。读取失败或没有可入绳内容时保持空绳，不重试轰炸、不放占位卡。
 - **敏感过滤（硬性要求）**：出现下列任一情况**不入绳**，且从历史中清除同值残留：
-  - 剪贴板注册了 `Clipboard Viewer Ignore`、`ExcludeClipboardContentFromMonitorProcessing`、`CanIncludeInClipboardHistory=false`、`CanUploadToCloudClipboard=false` 任一格式；
-  - 前台进程在白名单里（1Password、Bitwarden、Keepass、浏览器密码气泡窗口）；
+  - 剪贴板注册了 `Clipboard Viewer Ignore`、`ExcludeClipboardContentFromMonitorProcessing`、`CanIncludeInClipboardHistory=false`、`CanUploadToCloudClipboard=false` 任一格式（后两者按值判定，读不到值即 fail-closed）；
+  - 复制发生时/读取时的前台进程在白名单里（1Password、Bitwarden、Keepass、浏览器密码气泡窗口）；**启动读取时额外检查剪贴板 owner 进程**——那个时刻的"前台"已经不是复制发生时的那一个，而 owner 通常就是写剪贴板的进程；
   - 内容匹配密码/卡号/密钥形态（长度 8–64 的混合字符且窗口标题含"密码/Passkey/OTP"等）。
 - **容量**：最近 100 项（图片+文字共享），LRU 淘汰，固定项不淘汰；文字全文入 SQLite，UI 只渲染前 2KB。
 - **默认退出即清**：文字历史默认不持久化；用户可在设置里打开"加密保留"（DPAPI，当前用户范围）。
@@ -214,7 +216,7 @@ Clipline/
 | 身份 | 代码签名（OV/EV 证书）+ SmartScreen 申报 | 未签名的 exe 会被 SmartScreen 拦，且**剪贴板/输入注入类程序**在无签名时更容易被杀软误判。这是分发的硬门槛，不是可选项 |
 | 首次运行 | 解压到上述目录 → 写默认 `settings.json` → 注册热键 → 创建锚点窗口。**不**自动开机自启，设置里"登录时启动"默认关 | 剪贴板常驻程序必须让用户主动开启，否则第一次被发现就永久不信任 |
 | 自启 | `HKCU\Software\Microsoft\Windows\CurrentVersion\Run` 一条值，指向 exe 绝对路径；关闭开关时删该值 | 用户级 Run 键无需管理员，卸载时一并清 |
-| 常驻入口 | 系统托盘图标（左键/双击=拉起或收起绳子，右键菜单=显示/收起绳子 · **显示下拉绳（顶边绳头，带勾选）** · **中文 / English（各带勾选）** · 退出 Clipline）+ 全局热键 `Ctrl+Alt+T`（开关）/`Ctrl+Alt+L`（开关下拉绳，与托盘同一开关）/`Ctrl+Alt+Shift+Q`（退出）。**spike 已实现**：`Shell_NotifyIcon` + `CreateIcon` 手工像素画 HICON（32×32 @200% DPI，按 `SM_CXSMICON` 取尺寸），未引 WinForms —— 引了会让 `Application`/`Clipboard` 在隐式 using 下变二义 | 免安装分发时托盘是"如何关掉一个没有窗口的程序"的唯一直觉入口，spike 阶段缺它只能靠热键，可发现性为零。Win11 默认把新图标收进 `^` 折叠区，所以 tooltip 和菜单文字必须自带产品名 |
+| 常驻入口 | 系统托盘图标（左键/双击=拉起或收起绳子，右键菜单=显示/收起绳子 · **显示下拉绳（顶边绳头，带勾选）** · **使用小 tips** · **中文 / English（各带勾选）** · 退出 Clipline）+ 全局热键 `Ctrl+Alt+T`（开关）/`Ctrl+Alt+L`（开关下拉绳，与托盘同一开关）/`Ctrl+Alt+Shift+Q`（退出）。**spike 已实现**：`Shell_NotifyIcon` + `CreateIcon` 手工像素画 HICON（32×32 @200% DPI，按 `SM_CXSMICON` 取尺寸），未引 WinForms —— 引了会让 `Application`/`Clipboard` 在隐式 using 下变二义 | 免安装分发时托盘是"如何关掉一个没有窗口的程序"的唯一直觉入口，spike 阶段缺它只能靠热键，可发现性为零。Win11 默认把新图标收进 `^` 折叠区，所以 tooltip 和菜单文字必须自带产品名。"使用小 tips"是把原来挂在绳上的四条操作提示搬进托盘后的入口 |
 | 单实例 | 命名 Mutex `Local\Clipline.App`；第二实例提示"已在运行"后退出 | spike 实测第二个实例 `RegisterHotKey` 返回 `False`，多实例会互相抢热键并让剪贴板重复入史 |
 | 关闭 | 托盘"退出" → 停轮询定时器 → `RemoveClipboardFormatListener` → 落盘（若开启持久化则加密写历史）→ `Shutdown()`。**关窗口 ≠ 退进程**，点 X 只收起绳子 | 文字历史默认"退出即清"，所以退出路径必须先把该清的清掉再结束进程 |
 | 更新 | Velopack（`win-x64` 便携 + 增量更新），或 v1 先"下载新版覆盖"手动更新 | 零网络是产品原则之一 —— 更新必须是**用户显式点击**的一次性动作，或干脆走 Windows 商店/手动下载，不能后台静默拉包。这条要在 M1 明确取舍 |
@@ -237,6 +239,8 @@ Clipline/
 9. **命名/代码风格**：`.editorconfig` 强制 `Nullable=enable`、file-scoped namespace、`async` 后缀、`var` 优先、**默认不写注释**（只在写"为什么"时加一行）；禁止 `Console.WriteLine` 调试残留，走 Serilog。
 10. **文案与语言**：用户可见文案**一律走文案表，不允许字面量散在控件里**。spike 用 `Strings.cs` 一张 `key → [zh, en]` 表 + `Lang.T/Format` + `Lang.Changed` 事件（卡片文字、右键菜单、引导气泡、托盘提示与 tooltip 全部订阅刷新，不重建窗口）；默认语言跟随 `CurrentUICulture`，用户切换后落 `%LOCALAPPDATA%\Clipline\language.txt`。**日志、命令行参数、异常信息故意不进表** —— 那些是给开发者看的，不该被语言开关影响。M1 换成 `.resw` 卫星资源（zh-Hans / en / es / ja），并把"语言"并进设置窗口；文案长度要按英文比中文长三成的余量设计（spike 已实测 200 DIP 卡片内英文两句提示占两行，引导气泡因此从固定 40 高改成 52 高 + 折行）。
 11. **Git 约定**：Conventional Commits（`feat:`/`fix:`/`spike:`），Spike 分支 `spike/*`，验证通过后 squash 进 `main` 并把结论写进 §8。
+12. **启动即读取当前剪贴板**：窗口 `SourceInitialized` 里先 `ParkOffscreen()`，再 `ClipboardWatcher.CaptureCurrent()`——先记下 `GetClipboardSequenceNumber()`（避免紧接着到达的同序号通知再读一遍），然后走与常规捕获**完全相同**的 `PrivacyGate → 读取 → 去重` 路径，把现有内容挂成第一张卡。这样"打开软件第一眼看到的是我刚复制的东西"，而不是只有启动后新复制才入绳。隐私闸门为此补一条**剪贴板 owner 进程**判定：启动时的"前台"已经回不到复制发生的时刻，而 owner 通常就是写剪贴板的进程。读取失败/没有可入绳内容 → 空绳，不塞样例卡、不无限重试。
+13. **使用说明面板**：`TipsPanel` 是独立的非激活窗口（`WS_EX_NOACTIVATE` + `WM_MOUSEACTIVATE → MA_NOACTIVATE`，参与命中测试所以点一下就能收起），由托盘菜单"使用小 tips"打开，贴主屏工作区右下角（任务栏之上），高度按内容量出来、中英各自放得下；点击或 12 秒后自动收起。说明只在用户主动点开时出现，绝不在启动/首次展开时主动弹面板。
 
 ---
 
@@ -250,7 +254,7 @@ Clipline/
 | R4 | **文字"一字排开"不可读** | 中：核心卖点打折 | 摘要卡 + 搜索浮层 + 双击直贴 | 用 20 条真实复制内容做纸面/原型评审 |
 | R5 | 顶边热区与全屏游戏/远程桌面冲突 | 中 | 前台是全屏独占或 RDP 时自动抑制 + 开关 | 游戏与 `mstsc` 实测 |
 | R6 | OneDrive 重定向截图目录 | 中 | 走 Known Folder GUID 而非拼字符串路径 | 开启"截图备份"后实测 |
-| R7 | 密码泄漏进历史 | 高（隐私事故） | PrivacyGate 四重判定（§3），默认退出即清 | 用 1Password/Bitwarden 复制做红队测试 |
+| R7 | 密码泄漏进历史 | 高（隐私事故） | PrivacyGate 四重判定（§3；启动读取额外按**剪贴板 owner 进程**再判一次），默认退出即清 | 用 1Password/Bitwarden 复制做红队测试 |
 | R8 | 卡片质感达不到 Tendedero（玻璃/轻摇） | 中 | 卡片渲染层可替换为 Direct2D/Win2D，架构不变 | 视觉对照截图评审 |
 | R9 | 常驻内存与体积 | 中 | 共享 1× 阴影位图替代逐卡 `DropShadowEffect`；`SoftwareOnly` 替代 WPF D3D 管线 | **已归因并回到预算内**：空载私有工作集 28MB（原总工作集 171MB → 99MB），空闲 CPU 0.08%，详见 §8.1 |
 | R11 | **常驻点击穿透细线会不会干扰贴顶窗口**（锚点决策带来的新风险） | 中 | 独立窗口 + `WS_EX_NOACTIVATE \| WS_EX_TOOLWINDOW \| WS_EX_TRANSPARENT`；绳子展开时隐藏锚点 | G4：贴顶最大化窗口下，鼠标穿过细线仍能拖窗/点标题栏；细线自身不产生悬停高亮或点击拦截 |
@@ -269,7 +273,7 @@ Clipline/
 | R4 | 🟡 直贴已通，摘要仍粗 | 双击直贴 **2026-11-02 用户实测通过**（记事本里直接出内容）；卡片目前是"整段文字截断"，M1 要做真正的摘要 + 搜索浮层 |
 | R9 | ✅ **已归因，回到预算内**（2026-11-02） | 两笔大账：①**每张卡片的 `DropShadowEffect` ≈ 3.5MB**（独立实验室 11 卡：129.4MB private，无阴影 90.9MB；换成共享 1× 阴影位图后 91.7MB），改为启动时离屏烘一张共享位图，每张卡只贴图，观感一致；②**WPF 的 D3D 管线本身 ≈ 48MB private**（同一实验窗：硬件 91.7MB → `SoftwareOnly` 43.1MB），绳子只是 180 DIP 高的窄带，软件光栅完全够用，也不再依赖显卡驱动。真实进程实测：空载 commit **46.0MB** / 私有工作集 **28.0MB** / 总 WS 99.1MB；展开 5 张 46.7 / 28.6；挂满 12 张 53.6 / 35.3。空闲 CPU 0.08%，展开动画峰值 6%、滚轮 1.7%（单核百分比） |
 | R10 | ✅ 已修 | 第二实例 `RegisterHotKey=False` 复现热键争抢 → 加命名 `Mutex` 单实例守卫 |
-| R7 | ✅ **G5 全绿**（2026-11-02 08:54 自动，09:23 改锚点/退出后复跑仍 `PASS`） | `--selftest` 六条断言一次跑过：`RESULT PASS clipboardUsable=True captures=10 rejections=2 selfWrites=1 duplicates=1 staleSkips=1 evictions=1 cards=12`。两条拦截原因分别是 `ignore format present: Clipboard Viewer Ignore` 与 `opt-out flag CanIncludeInClipboardHistory=0`；自写抑制靠 `GetClipboardOwner()` 进程比对。**尚未覆盖**：密码管理器真实红队测试（需真人 1Password/Bitwarden 复制）、前台白名单只做了进程名匹配 |
+| R7 | ✅ **G5 全绿**（2026-11-02 08:54 自动，09:23 改锚点/退出后复跑仍 `PASS`） | `--selftest` 六条断言一次跑过：`RESULT PASS clipboardUsable=True captures=10 rejections=2 selfWrites=1 duplicates=1 staleSkips=1 evictions=1 cards=12`。两条拦截原因分别是 `ignore format present: Clipboard Viewer Ignore` 与 `opt-out flag CanIncludeInClipboardHistory=0`；自写抑制靠 `GetClipboardOwner()` 进程比对。**11-02 新增启动读取**：`R7 startup captured Text text[…+len11] owner=none total=1`；把剪贴板换成带 ignore 格式的内容后重启 → `R7 BLOCKED ignore format present: Clipboard Viewer Ignore source=startup`，说明启动路径同样过闸门。selftest 的断言已改为相对基线计数（见 spike/README），上面这组数字是改动前的历史证据。**尚未覆盖**：密码管理器真实红队测试（需真人 1Password/Bitwarden 复制）、前台白名单只做了进程名匹配 |
 | R11 | ✅ 锚点成立，形态定稿 | 锚点最终形态：**用户提供 SVG 拉绳素材**经 `Geometry.Parse` 直接渲染（不引 SVG 库；SVG 的 nonzero 与 WPF 的 EvenOdd 差异正好把绳圈内孔挖对），挂在工作区 **2/3** 处而非居中；绳子本体回退为白色半透明横线。**锚点自身可交互**：`GhostWindow` 用 `ClickThrough` 虚属性区分"纯装饰（`WS_EX_TRANSPARENT` + 不参与命中）"与"可点（参与命中测试 + `MA_NOACTIVATE` 不抢焦点）"，绳头属后者；踩过的坑是 `IsHitTestVisible = ClickThrough` 写反，导致绳头永远收不到 `MouseEnter`。触发区改为恒定中间 1/3 后与绳宽解耦（实测 `triggerZone=(1040..2080)` 物理像素 = 3120 的中间 1/3，`anchor physical=(2046,0,68x100) ratio=0.67`） |
 | R14 | ✅ 注入管线通过，端到端待人工 | `sizeofINPUT=40 accepted=4 lastError=0`（此前 32 字节 → `accepted=0 err=87`，被误当成权限问题）。G3-a 端到端改为半自动 `--paste-gate`：用户点一下探针窗口交出前台，程序注入 Ctrl+V 并比对长度+哈希 |
 
@@ -288,10 +292,11 @@ Clipline/
 - **G2 顶边悬停触发**：指针进入顶边中部 2px → 弹性垂下（带轻摇）；移开 → 收起；全屏应用下不触发。
 - **G3 数据双向**：单击复制（图片+文字）后前台可 `Ctrl+V`；拖出到记事本(文字)/画图(图片)/资源管理器(伪文件)成功。
 - **G4 锚点常驻**（因 §7.2 决策新增）：一条 4px 点击穿透细线常驻顶边中部，贴顶最大化窗口不受其阻挡；绳子展开时它消失、收起时回现；`onboarded.flag` 不存在时首次气泡出现，首次成功展开后永久消失。
-- **G5 剪贴板监听 + 隐私闸门**（M1 第一优先级，提前在 spike 内做）：外部进程复制 → 自动入绳；带 `Clipboard Viewer Ignore` / `CanIncludeInClipboardHistory=0` 的复制 → 被拦且不落库；本程序自己点卡片的复制 → 被自写抑制忽略，不产生自我循环；条目超上限按 LRU 挤掉最旧一张。
+- **G5 剪贴板监听 + 隐私闸门**（M1 第一优先级，提前在 spike 内做）：外部进程复制 → 自动入绳；**启动时立即把剪贴板现有内容挂成第一张卡**；带 `Clipboard Viewer Ignore` / `CanIncludeInClipboardHistory=0` 的复制 → 被拦且不落库（启动读取同样受这条约束，并按剪贴板 owner 进程再判一次）；本程序自己点卡片的复制 → 被自写抑制忽略，不产生自我循环；条目超上限按 LRU 挤掉最旧一张。
+- **G6 托盘**：右下角托盘图标（左键开关、右键菜单含"使用小 tips"说明面板与退出）；免安装形态下这是唯一的可见退出入口。
 
 ### M1 · MVP（约 2–3 周节奏）
-剪贴板历史（文字+图片）上绳、去重、100 项 LRU、固定项、单击复制、双击直贴、拖出、删除、`Ctrl+Alt+T`、托盘、设置（热区/容量/快捷键）、PrivacyGate。
+剪贴板历史（文字+图片）上绳（**启动即读当前剪贴板**）、去重、100 项 LRU、固定项、单击复制、双击直贴、拖出、删除、`Ctrl+Alt+T`、托盘（含"使用小 tips"说明面板）、设置（热区/容量/快捷键）、PrivacyGate。
 
 ### M2 · v1 完整（对齐 Tendedero 主干）
 截图目录监听、录屏卡片与悬停预览、`Ctrl+Z` 回挂、拖进文件夹落地即离绳、多屏、PerMonitorV2、开机自启、i18n（**中英双语已在 spike 做完，见 §7.10**：M1 只需把它换成 `.resw` 卫星资源、补 es/ja 并把开关搬进设置窗口）、安装包与代码签名。

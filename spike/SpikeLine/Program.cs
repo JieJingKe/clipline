@@ -34,6 +34,11 @@ internal static class Program
             return RunRenderPreview(GetValue(args, "--render-preview"));
         }
 
+        if (args.Contains("--render-tips"))
+        {
+            return RunRenderTips(GetValue(args, "--render-tips"));
+        }
+
         if (args.Contains("--paste-gate"))
         {
             return RunPasteGate();
@@ -64,21 +69,25 @@ internal static class Program
         };
         AppDomain.CurrentDomain.UnhandledException += (_, unhandled) =>
             Log.Write($"FATAL background exception {unhandled.ExceptionObject}");
-        var window = new LineWindow(SpikeSamples.Build());
+        var window = new LineWindow([]);
         var zone = new HotZone(window);
         var anchor = new AnchorLine();
         var tip = new OnboardingTip();
+        var tips = new TipsPanel();
 
         window.Show();
         var tray = new TrayIcon(window.WindowHandle) { AnchorEnabled = anchorEnabled };
         tray.ToggleRequested += window.ToggleManually;
         tray.AnchorToggleRequested += () => window.ToggleAnchor();
+        tray.TipsRequested += tips.Toggle;
         tray.QuitRequested += () =>
         {
             window.Close();
             app.Shutdown();
         };
         app.Exit += (_, _) => tray.Dispose();
+        // 启动时可能已把剪贴板现有内容挂上绳，托盘提示里的张数要立刻是真实的。
+        SetTrayTip(tray, window, window.IsOpen);
 
         anchor.PlaceOnPrimaryMonitor(window);
         anchor.SetVisible(anchorEnabled);
@@ -103,6 +112,7 @@ internal static class Program
         {
             window.RefreshLanguage();
             tip.RefreshLanguage();
+            tips.RefreshLanguage();
             if (tip.IsVisible)
             {
                 tip.PlaceBelowAnchor(anchor);
@@ -148,6 +158,19 @@ internal static class Program
         if (args.Contains("--selftest"))
         {
             RunSelfTest(app, window, anchor);
+        }
+
+        // 自检用：跑 N 毫秒后正常退出，不必去杀进程（进程可能正在写剪贴板）。
+        if (GetValue(args, "--quit-after") is { } quitAfter && int.TryParse(quitAfter, out var quitMs))
+        {
+            var quitTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(quitMs) };
+            quitTimer.Tick += (_, _) =>
+            {
+                quitTimer.Stop();
+                app.Shutdown();
+            };
+            quitTimer.Start();
+            Log.Write($"dev: quit after {quitMs}ms");
         }
 
         app.Run(window);
@@ -334,12 +357,13 @@ internal static class Program
             StrokeThickness = 1.1,
         }, 20 + ((sceneWidth - 40) * AnchorLine.AnchorRatio) - (AnchorLine.CordWidthDip / 2), 16);
 
-        // 展开态：白线 + 四张牛皮纸便签（图文同宽，最新的一张挂最右），这里直接画真实首屏的四句提示
+        // 展开态：白线 + 四张牛皮纸便签（图文同宽，最新的一张挂最右）。卡片现在装的是用户复制的内容，
+        // 操作提示已搬到托盘菜单的"使用小 tips"面板，这里用普通复制文本来示意。
         AddLine(118);
-        AddCard(60, 120, Lang.T("hint.scroll"), false);
-        AddCard(280, 120, Lang.T("hint.click"), false);
-        AddCard(500, 120, Lang.T("hint.doubleClick"), false);
-        AddCard(720, 120, Lang.T("hint.dragImage"), false);
+        AddCard(60, 120, "git rebase --interactive HEAD~3", true);
+        AddCard(280, 120, "https://github.com/JieJingKe/clipline", false);
+        AddCard(500, 120, "Clipline 把刚复制的内容晾在屏幕顶边，需要时再取。", false);
+        AddCard(720, 120, "Ctrl+Alt+T 开关绳子，滚轮沿着绳子翻看更早的卡片。", false);
 
         canvas.Measure(new Size(sceneWidth, sceneHeight));
         canvas.Arrange(new Rect(0, 0, sceneWidth, sceneHeight));
@@ -362,6 +386,63 @@ internal static class Program
         }
 
         Log.Write($"render-preview → {target}");
+        return 0;
+    }
+
+    /// <summary>
+    /// 离屏把托盘菜单"使用小 tips"面板画成 PNG。面板贴桌面临时出现，所以垫一层浅色到深色的渐变，
+    /// 一次看清它在亮、暗两种桌面上的对比度。
+    /// </summary>
+    private static int RunRenderTips(string? outputPath)
+    {
+        _ = new Application();
+        var target = outputPath ?? System.IO.Path.Combine(System.IO.Path.GetTempPath(), "clipline-tips.png");
+
+        var panel = new TipsPanel();
+        var content = (FrameworkElement)panel.Content;
+        panel.Content = null;
+        content.Width = panel.Width;
+        content.Height = panel.Height;
+        content.HorizontalAlignment = HorizontalAlignment.Right;
+        content.VerticalAlignment = VerticalAlignment.Bottom;
+        content.Margin = new Thickness(0, 0, 16, 16);
+
+        const double sceneWidth = 520;
+        const double sceneHeight = 340;
+        var background = new LinearGradientBrush { StartPoint = new Point(0, 0), EndPoint = new Point(1, 0) };
+        background.GradientStops.Add(new GradientStop(Color.FromRgb(0x8A, 0xC7, 0xE8), 0));
+        background.GradientStops.Add(new GradientStop(Color.FromRgb(0xF2, 0xF3, 0xF5), 0.45));
+        background.GradientStops.Add(new GradientStop(Color.FromRgb(0x2A, 0x2D, 0x31), 1));
+        background.Freeze();
+
+        var scene = new System.Windows.Controls.Grid
+        {
+            Width = sceneWidth,
+            Height = sceneHeight,
+            Background = background,
+            Children = { content },
+        };
+        scene.Measure(new Size(sceneWidth, sceneHeight));
+        scene.Arrange(new Rect(0, 0, sceneWidth, sceneHeight));
+        scene.UpdateLayout();
+
+        const double scale = 2.0;
+        var bitmap = new System.Windows.Media.Imaging.RenderTargetBitmap(
+            (int)(sceneWidth * scale),
+            (int)(sceneHeight * scale),
+            96 * scale,
+            96 * scale,
+            System.Windows.Media.PixelFormats.Pbgra32);
+        bitmap.Render(scene);
+
+        var encoder = new System.Windows.Media.Imaging.PngBitmapEncoder();
+        encoder.Frames.Add(System.Windows.Media.Imaging.BitmapFrame.Create(bitmap));
+        using (var stream = System.IO.File.Create(target))
+        {
+            encoder.Save(stream);
+        }
+
+        Log.Write($"render-tips → {target}");
         return 0;
     }
 
@@ -453,6 +534,10 @@ internal static class Program
     private static void RunSelfTest(Application app, LineWindow window, AnchorLine anchor)
     {
         var watcher = window.Watcher;
+        // 启动读取会先把剪贴板现有内容挂成第一张卡，所以下面所有断言都按"相对基线"算，
+        // 否则 captures>=1 这类条件会在启动那一刻就提前满足。
+        var baselineCaptures = watcher.Captures;
+        var baselineRejections = watcher.Rejections;
         var stage = 0;
         var deadline = 0L;
         var lruIndex = 0;
@@ -490,14 +575,14 @@ internal static class Program
                     }
 
                     clipboardUsable = probe;
-                    Log.Write($"selftest: clipboard probe openable={probe} err={probeError}; cards={window.CardCount} captures={watcher.Captures}");
+                    Log.Write($"selftest: clipboard probe openable={probe} err={probeError}; cards={window.CardCount} captures={watcher.Captures} baseline={baselineCaptures}");
                     SpawnHelper("--copy-text \"selftest 普通复制 12345\"");
-                    WaitFor(8000, () => watcher.Captures >= 1);
+                    WaitFor(8000, () => watcher.Captures >= baselineCaptures + 1);
                     break;
                 case 3:
                     Log.Write($"selftest: ①外部复制入绳 cards={window.CardCount} labels={window.CardLabels} captures={watcher.Captures}");
                     SpawnHelper("--copy-text \"selftest 敏感复制 67890\" --with-ignore");
-                    WaitFor(8000, () => watcher.Rejections >= 1);
+                    WaitFor(8000, () => watcher.Rejections >= baselineRejections + 1);
                     break;
                 case 4:
                     Log.Write($"selftest: ②隐私闸门 rejections={watcher.Rejections} last={watcher.LastRejection} cards={window.CardCount}");
@@ -517,7 +602,7 @@ internal static class Program
                     SpawnHelper("--copy-text \"selftest 普通复制 12345\"");
                     WaitFor(8000, () => watcher.Duplicates >= 1);
                     break;
-                case 6 when lruIndex < 9:
+                case 6 when lruIndex < 13:
                     // 一次只派一个写者，且绝不在 UI 线程 Sleep：绳子收起时批量复制是真实场景，
                     // 阻塞 UI 会让排队的通知塌成一次读取（上一轮实测 9 写 1 获）。
                     SpawnHelper($"--copy-text \"selftest LRU 第 {lruIndex} 条\"");
@@ -531,7 +616,7 @@ internal static class Program
                 case 7:
                     Log.Write($"selftest: ⑤LRU 挤旧 evictions={window.Evictions} cards={window.CardCount}");
                     SpawnHelper("--copy-text \"selftest 历史关闭 13579\" --history-opt-out");
-                    WaitFor(8000, () => watcher.Rejections >= 2);
+                    WaitFor(8000, () => watcher.Rejections >= baselineRejections + 2);
                     break;
                 case 8:
                     // 直贴门禁不能全自动：Windows 前台锁不允许后台进程抢前台，
@@ -546,8 +631,8 @@ internal static class Program
                     Wait(150);
                     break;
                 default:
-                    var pass = watcher.Captures >= 10
-                        && watcher.Rejections >= 2
+                    var pass = watcher.Captures >= baselineCaptures + 13
+                        && watcher.Rejections >= baselineRejections + 2
                         && watcher.SelfWrites >= 1
                         && watcher.Duplicates >= 1
                         && window.Evictions >= 1

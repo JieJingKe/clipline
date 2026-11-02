@@ -60,13 +60,24 @@ internal static class PrivacyGate
         }
 
         var foreground = Native.ForegroundProcessName();
-        if (foreground.Length > 0 && SensitiveProcesses.Any(name =>
-            foreground.Equals(name, StringComparison.OrdinalIgnoreCase) ||
-            foreground.Contains(name, StringComparison.OrdinalIgnoreCase)))
+        if (IsSensitive(foreground))
         {
             return $"sensitive foreground process: {foreground}";
         }
 
+        // 启动时直接读现有剪贴板，光看"当前前台"已经回不到复制发生的时刻；剪贴板 owner
+        // 通常正是写它的进程，所以再按 owner 判一次，密码管理器写的内容仍然拦得住。
+        var owner = Native.ClipboardOwnerProcess();
+        if (IsSensitive(owner))
+        {
+            return $"sensitive clipboard owner: {owner}";
+        }
+
         return null;
     }
+
+    private static bool IsSensitive(string process) =>
+        process.Length > 0 && SensitiveProcesses.Any(name =>
+            process.Equals(name, StringComparison.OrdinalIgnoreCase) ||
+            process.Contains(name, StringComparison.OrdinalIgnoreCase));
 }

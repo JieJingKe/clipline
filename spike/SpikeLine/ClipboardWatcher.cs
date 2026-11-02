@@ -9,7 +9,11 @@ namespace Clipline.Spike;
 /// </summary>
 internal sealed class ClipboardWatcher
 {
+    private static readonly string ImagePrefix =
+        System.IO.Path.Combine(System.IO.Path.GetTempPath(), "clipline-spike-clip-");
+
     private readonly HashSet<string> _seen = [];
+    private readonly List<string> _imageFiles = [];
     private int _imageSequence;
     private uint _lastSequence;
 
@@ -36,6 +40,7 @@ internal sealed class ClipboardWatcher
 
     public void Attach(IntPtr hwnd)
     {
+        CleanStaleImages();
         var added = Native.AddClipboardFormatListener(hwnd);
         Log.Write($"R7 clipboard listener attached={added} lastError={System.Runtime.InteropServices.Marshal.GetLastWin32Error()}");
     }
@@ -45,6 +50,47 @@ internal sealed class ClipboardWatcher
         if (hwnd != IntPtr.Zero)
         {
             Native.RemoveClipboardFormatListener(hwnd);
+        }
+
+        CleanImages();
+    }
+
+    /// <summary>图片卡片落在 %TEMP%，属于"退出即清"的一部分；启动时顺手收掉上次异常退出留下的。</summary>
+    private void CleanStaleImages()
+    {
+        try
+        {
+            foreach (var path in System.IO.Directory.EnumerateFiles(
+                System.IO.Path.GetTempPath(),
+                "clipline-spike-clip-*.png"))
+            {
+                TryDelete(path);
+            }
+        }
+        catch (Exception error)
+        {
+            Log.Write($"R7 stale image cleanup failed: {error.GetType().Name}: {error.Message}");
+        }
+    }
+
+    private void CleanImages()
+    {
+        foreach (var path in _imageFiles)
+        {
+            TryDelete(path);
+        }
+
+        _imageFiles.Clear();
+    }
+
+    private static void TryDelete(string path)
+    {
+        try
+        {
+            System.IO.File.Delete(path);
+        }
+        catch (Exception)
+        {
         }
     }
 
@@ -60,6 +106,23 @@ internal sealed class ClipboardWatcher
         }
 
         _lastSequence = sequence;
+        Capture("update");
+    }
+
+    /// <summary>
+    /// 启动时把剪贴板里已有的内容当成第一张卡片（用户要求：打开软件就能看到当前内容，
+    /// 而不是只有启动后新复制的才入绳）。隐私闸门、去重、序列号标记与常规捕获完全同路。
+    /// </summary>
+    public void CaptureCurrent()
+    {
+        // 先记住当前序列号：这次读到的内容已经入绳，紧接着若收到同序号通知不应再读一遍。
+        _lastSequence = Native.GetClipboardSequenceNumber();
+        Capture("startup");
+    }
+
+    private void Capture(string source)
+    {
+        var startup = source == "startup";
 
         if (Native.ClipboardOwnedByThisProcess())
         {
@@ -73,14 +136,16 @@ internal sealed class ClipboardWatcher
         {
             Rejections++;
             LastRejection = rejection;
-            Log.Write($"R7 BLOCKED {rejection}");
+            Log.Write($"R7 BLOCKED {rejection} source={source}");
             return;
         }
 
         var item = ReadItem();
         if (item is null)
         {
-            Log.Write("R7 update with no capturable text/image, skipped");
+            Log.Write(startup
+                ? "R7 startup clipboard has no capturable text/image"
+                : "R7 update with no capturable text/image, skipped");
             return;
         }
 
@@ -94,7 +159,7 @@ internal sealed class ClipboardWatcher
 
         Captures++;
         item.Label = $"C{Captures}";
-        Log.Write($"R7 captured {item.Kind} {fingerprint} owner={Native.ClipboardOwnerProcess()} total={Captures}");
+        Log.Write($"R7 {(startup ? "startup " : string.Empty)}captured {item.Kind} {fingerprint} owner={Native.ClipboardOwnerProcess()} total={Captures}");
         Captured?.Invoke(item);
     }
 
@@ -147,15 +212,16 @@ internal sealed class ClipboardWatcher
             return null;
         }
 
-        var path = System.IO.Path.Combine(
-            System.IO.Path.GetTempPath(),
-            $"clipline-spike-clip-{(++_imageSequence)}.png");
+        var path = $"{ImagePrefix}{++_imageSequence}.png";
         var encoder = new PngBitmapEncoder();
         encoder.Frames.Add(BitmapFrame.Create(source));
         using (var stream = System.IO.File.Create(path))
         {
             encoder.Save(stream);
         }
+
+        // 去重命中时这张卡不会入绳，但文件已经写出来了，同样要记进清理清单。
+        _imageFiles.Add(path);
 
         return new SpikeItem
         {

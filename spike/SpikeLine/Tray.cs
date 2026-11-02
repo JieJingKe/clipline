@@ -14,6 +14,7 @@ internal sealed class TrayIcon : IDisposable
     private const uint AnchorId = 103;
     private const uint LangZhId = 104;
     private const uint LangEnId = 105;
+    private const uint TipsId = 106;
     private const uint IconId = 1;
 
     private readonly IntPtr _hwnd;
@@ -30,6 +31,8 @@ internal sealed class TrayIcon : IDisposable
     public bool AnchorEnabled { get; set; } = true;
 
     public event Action? AnchorToggleRequested;
+
+    public event Action? TipsRequested;
 
     public TrayIcon(IntPtr hwnd)
     {
@@ -113,6 +116,7 @@ internal sealed class TrayIcon : IDisposable
             Native.MF_STRING | (AnchorEnabled ? Native.MF_CHECKED : 0),
             (UIntPtr)AnchorId,
             Lang.T("tray.anchor"));
+        Native.AppendMenuW(menu, Native.MF_STRING, (UIntPtr)TipsId, Lang.T("tray.tips"));
         Native.AppendMenuW(menu, Native.MF_SEPARATOR, UIntPtr.Zero, string.Empty);
 
         // 两种语言各占一行并各带勾选，而不是一个"切换"按钮：用户不必先猜当前是哪门语言。
@@ -147,6 +151,9 @@ internal sealed class TrayIcon : IDisposable
                 break;
             case AnchorId:
                 AnchorToggleRequested?.Invoke();
+                break;
+            case TipsId:
+                TipsRequested?.Invoke();
                 break;
             case ShowHideId:
                 ToggleRequested?.Invoke();
