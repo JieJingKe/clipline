@@ -233,7 +233,7 @@ Clipline/
 5. **剪贴板读取要重试 + 序列号闸门**：别的进程可能正持有剪贴板（`CLIPBRD_E_CANT_OPEN`），统一走"最多 5 次、间隔 50ms"的封装，永不阻塞 UI 线程。`WM_CLIPBOARDUPDATE` 在 UI 忙时会在队列里堆积，一次批量复制可能只对应一次真实内容变化 —— 处理前必须比 `GetClipboardSequenceNumber()`，同序列直接丢（spike 实测：9 次连发复制塌成 1 次捕获 + 8 次"重复"，见 spike/README bug 7）。
 6. **自写抑制**：我们写剪贴板会触发 `WM_CLIPBOARDUPDATE`，用 `GetClipboardOwner()` 比对自身 HWND + 序号标记，避免自己入史。
 7. **DPI / 多屏**：manifest 声明 Per-Monitor V2；每个物理显示器顶部各一条绳（v1 可先只支持主屏，但布局计算必须按屏工作区，不能写死 1920）。锚点同样按屏放置，且必须在**该屏自己的 DPI** 下算 4px。
-8. **性能预算**：常驻内存 ≤ 80MB（**spike 实测 171MB，见 R9，M1 前必须归因**），空闲 CPU ≤ 0.5%，绳子展开到可交互 ≤ 120ms。图片一律降采样解码，原图不进内存。锚点是常驻窗口，其内存与唤醒开销要单独计量。
+8. **性能预算**：常驻内存 ≤ 80MB（**spike 已回到预算内：空载提交 46MB / 私有工作集 28MB，12 张挂满 54MB / 36MB**，见 R9；总工作集 99–114MB 里约 60MB 是与系统共享的 WPF/.NET 页面，Task Manager「内存」列对应的是私有工作集），空闲 CPU ≤ 0.5%（spike 实测 0.08%），绳子展开到可交互 ≤ 120ms。图片一律降采样解码，原图不进内存。锚点是常驻窗口，其内存与唤醒开销要单独计量。
 9. **命名/代码风格**：`.editorconfig` 强制 `Nullable=enable`、file-scoped namespace、`async` 后缀、`var` 优先、**默认不写注释**（只在写"为什么"时加一行）；禁止 `Console.WriteLine` 调试残留，走 Serilog。
 10. **文案与语言**：用户可见文案**一律走文案表，不允许字面量散在控件里**。spike 用 `Strings.cs` 一张 `key → [zh, en]` 表 + `Lang.T/Format` + `Lang.Changed` 事件（卡片文字、右键菜单、引导气泡、托盘提示与 tooltip 全部订阅刷新，不重建窗口）；默认语言跟随 `CurrentUICulture`，用户切换后落 `%LOCALAPPDATA%\Clipline\language.txt`。**日志、命令行参数、异常信息故意不进表** —— 那些是给开发者看的，不该被语言开关影响。M1 换成 `.resw` 卫星资源（zh-Hans / en / es / ja），并把"语言"并进设置窗口；文案长度要按英文比中文长三成的余量设计（spike 已实测 200 DIP 卡片内英文两句提示占两行，引导气泡因此从固定 40 高改成 52 高 + 折行）。
 11. **Git 约定**：Conventional Commits（`feat:`/`fix:`/`spike:`），Spike 分支 `spike/*`，验证通过后 squash 进 `main` 并把结论写进 §8。
@@ -252,7 +252,7 @@ Clipline/
 | R6 | OneDrive 重定向截图目录 | 中 | 走 Known Folder GUID 而非拼字符串路径 | 开启"截图备份"后实测 |
 | R7 | 密码泄漏进历史 | 高（隐私事故） | PrivacyGate 四重判定（§3），默认退出即清 | 用 1Password/Bitwarden 复制做红队测试 |
 | R8 | 卡片质感达不到 Tendedero（玻璃/轻摇） | 中 | 卡片渲染层可替换为 Direct2D/Win2D，架构不变 | 视觉对照截图评审 |
-| R9 | 常驻内存与体积 | 中 | 框架依赖 + 安装器；渲染层必要时去掉位图特效 | spike 实测 WorkingSet 171MB（预算 80MB），待归因 |
+| R9 | 常驻内存与体积 | 中 | 共享 1× 阴影位图替代逐卡 `DropShadowEffect`；`SoftwareOnly` 替代 WPF D3D 管线 | **已归因并回到预算内**：空载私有工作集 28MB（原总工作集 171MB → 99MB），空闲 CPU 0.08%，详见 §8.1 |
 | R11 | **常驻点击穿透细线会不会干扰贴顶窗口**（锚点决策带来的新风险） | 中 | 独立窗口 + `WS_EX_NOACTIVATE \| WS_EX_TOOLWINDOW \| WS_EX_TRANSPARENT`；绳子展开时隐藏锚点 | G4：贴顶最大化窗口下，鼠标穿过细线仍能拖窗/点标题栏；细线自身不产生悬停高亮或点击拦截 |
 | R12 | 锚点常驻的内存与唤醒成本（叠加 R9） | 中 | 锚点只画一条线，不加 `Effect`；两态分别计量 | 记录"仅锚点常驻"与"锚点+绳子展开"的 WorkingSet 与 CPU |
 | R13 | **剪贴板被某进程持有后全机长时间不可用**（spike 实测发现的新风险） | 中高：一次异常就让用户的 Ctrl+C/Ctrl+V 失效数小时 | 绝不长期持有剪贴板句柄：`OpenClipboard` 后立刻 `CloseClipboard`；隐私标志优先 `IsClipboardFormatAvailable`（无需打开剪贴板）；取值失败 fail-closed；写侧有限次退避重试（8 次）后放弃并走降级路径，不静默无限重试 | 实测：22:07 强杀一个正处于剪贴板写入中的 spike 实例后，全机 `OpenClipboard` 一律 `ERROR_ACCESS_DENIED(5)`、`GetClipboardOwner()=NULL`、`CloseClipboard=1418`，连 PowerShell `Set-Clipboard` 都失败；**次日 08:47 自行恢复**（持锁方退出），未注销未重启 |
@@ -267,13 +267,13 @@ Clipline/
 | R5 | 🟡 逻辑已实现 | 全屏抑制=前台覆盖整显示器或 `mstsc`，排除 `explorer`；待实机收敛 |
 | R8 | 🟡 摆动已实现，卡片改牛皮纸 | 4 段阻尼关键帧；绳子是白色半透明横线（用户要求回退，无下垂弧）。卡片按用户反馈从"半透明白玻璃 + 白字"改成**牛皮纸便签 + 墨色字**，第二版再整体提亮一档（`#FDF7EA → #F1E2C4`），并把图文卡片统一为 200 DIP 宽；夹子从纯色矩形换成用户提供的晾衣夹 SVG（金属银渐变），新卡片改挂最右侧。配色与夹子几何收在 `KraftPaper` / `CardView.BuildClothespin` 一处，`--render-preview` 离屏出图自检（白→深灰渐变背景，一次看清华白两种桌面） |
 | R4 | 🟡 直贴已通，摘要仍粗 | 双击直贴 **2026-11-02 用户实测通过**（记事本里直接出内容）；卡片目前是"整段文字截断"，M1 要做真正的摘要 + 搜索浮层 |
-| R9 | 🔴 **新发现，超预算** | WorkingSet 实测 **171MB**（80MB 目标的 2 倍）。待查：`DropShadowEffect` 位图缓存 vs WPF 基线 |
+| R9 | ✅ **已归因，回到预算内**（2026-11-02） | 两笔大账：①**每张卡片的 `DropShadowEffect` ≈ 3.5MB**（独立实验室 11 卡：129.4MB private，无阴影 90.9MB；换成共享 1× 阴影位图后 91.7MB），改为启动时离屏烘一张共享位图，每张卡只贴图，观感一致；②**WPF 的 D3D 管线本身 ≈ 48MB private**（同一实验窗：硬件 91.7MB → `SoftwareOnly` 43.1MB），绳子只是 180 DIP 高的窄带，软件光栅完全够用，也不再依赖显卡驱动。真实进程实测：空载 commit **46.0MB** / 私有工作集 **28.0MB** / 总 WS 99.1MB；展开 5 张 46.7 / 28.6；挂满 12 张 53.6 / 35.3。空闲 CPU 0.08%，展开动画峰值 6%、滚轮 1.7%（单核百分比） |
 | R10 | ✅ 已修 | 第二实例 `RegisterHotKey=False` 复现热键争抢 → 加命名 `Mutex` 单实例守卫 |
 | R7 | ✅ **G5 全绿**（2026-11-02 08:54 自动，09:23 改锚点/退出后复跑仍 `PASS`） | `--selftest` 六条断言一次跑过：`RESULT PASS clipboardUsable=True captures=10 rejections=2 selfWrites=1 duplicates=1 staleSkips=1 evictions=1 cards=12`。两条拦截原因分别是 `ignore format present: Clipboard Viewer Ignore` 与 `opt-out flag CanIncludeInClipboardHistory=0`；自写抑制靠 `GetClipboardOwner()` 进程比对。**尚未覆盖**：密码管理器真实红队测试（需真人 1Password/Bitwarden 复制）、前台白名单只做了进程名匹配 |
 | R11 | ✅ 锚点成立，形态定稿 | 锚点最终形态：**用户提供 SVG 拉绳素材**经 `Geometry.Parse` 直接渲染（不引 SVG 库；SVG 的 nonzero 与 WPF 的 EvenOdd 差异正好把绳圈内孔挖对），挂在工作区 **2/3** 处而非居中；绳子本体回退为白色半透明横线。**锚点自身可交互**：`GhostWindow` 用 `ClickThrough` 虚属性区分"纯装饰（`WS_EX_TRANSPARENT` + 不参与命中）"与"可点（参与命中测试 + `MA_NOACTIVATE` 不抢焦点）"，绳头属后者；踩过的坑是 `IsHitTestVisible = ClickThrough` 写反，导致绳头永远收不到 `MouseEnter`。触发区改为恒定中间 1/3 后与绳宽解耦（实测 `triggerZone=(1040..2080)` 物理像素 = 3120 的中间 1/3，`anchor physical=(2046,0,68x100) ratio=0.67`） |
 | R14 | ✅ 注入管线通过，端到端待人工 | `sizeofINPUT=40 accepted=4 lastError=0`（此前 32 字节 → `accepted=0 err=87`，被误当成权限问题）。G3-a 端到端改为半自动 `--paste-gate`：用户点一下探针窗口交出前台，程序注入 Ctrl+V 并比对长度+哈希 |
 
-环境事实：`PerMonitorV2` 生效，`\\.\DISPLAY1` 物理 3120×2080 / 工作区 3120×1984 / `scale=2.00`；居中 `Left=308 DIP → 616 px` 换算正确。Spike 期间修掉 10 个真实缺陷（ANSI 封送导致 `GetMonitorInfo` 静默失败、`DependencyProperty.Register` 写在实例字段、热键呼出被 32ms 轮询立即收起、无单实例守卫、日志跨进程追加互相覆盖、`OpenClipboard` 无重试且 `GetLastWin32Error` 被后置的日志写入冲掉、UI 线程阻塞让 9 次批量复制塌成 1 次捕获、`INPUT` 结构体 32 字节让 `SendInput` 静默失败、退出热键只关一个窗口导致进程残留、锚点命中测试写反导致绳头收不到鼠标事件），详见 `spike/README.md`。
+环境事实：`PerMonitorV2` 生效，`\\.\DISPLAY1` 物理 3120×2080 / 工作区 3120×1984 / `scale=2.00`；居中 `Left=308 DIP → 616 px` 换算正确。Spike 期间修掉 12 个真实缺陷（ANSI 封送导致 `GetMonitorInfo` 静默失败、`DependencyProperty.Register` 写在实例字段、热键呼出被 32ms 轮询立即收起、无单实例守卫、日志跨进程追加互相覆盖、`OpenClipboard` 无重试且 `GetLastWin32Error` 被后置的日志写入冲掉、UI 线程阻塞让 9 次批量复制塌成 1 次捕获、`INPUT` 结构体 32 字节让 `SendInput` 静默失败、退出热键只关一个窗口导致进程残留、锚点命中测试写反导致绳头收不到鼠标事件、绳宽封顶后卡片被排到窗口外、`PlaceCards()` 重复 `Children.Add` 让滚轮一滚就闪退），详见 `spike/README.md`。
 
 > G5 首轮（11-01 晚）曾被本机剪贴板不可用（R13）阻塞，跑出的是"未判定"而非失败；11-02 08:54 复验为 `PASS`。
 
@@ -325,7 +325,7 @@ Clipline/
 2. ~~`ClipboardWatcher` + `PrivacyGate`~~：spike 内完成并**自动验证通过**（G5 `RESULT PASS`，2026-11-02）；`AddClipboardSequenceNumber` 闸门、fail-closed 隐私判定、LRU 都留下了可复用的实现与日志证据。
 3. ~~解除本机剪贴板锁死~~：11-02 早自愈，无需注销。后续原型一律用 `Ctrl+Alt+Shift+Q` 干净退出，不再 `-Force`。（该热键本身曾有个 bug：只关绳子窗、进程残留 —— 已改为显式 `app.Shutdown()`。）
 4. **手动门禁**：照 `spike/README.md` 清单跑，还缺的人工项是 G1-a/b/c（焦点是否真被抢，尤其右键菜单 + **新加的"点绳头"**）、G3-b…e（拖出到记事本/画图/资源管理器/Word）、G4-a/b（**绳头悬停/点击是否真的拉起绳子且不抢焦点**，以及它 34×50 DIP 的命中区会不会挡住贴顶窗口）、G5-c（真实截图工具上绳）。G3-a 双击直贴已过（用户实测）。
-5. 查 171MB 内存来源（去掉 `DropShadowEffect` 对比一次）。
+5. ~~查 171MB 内存来源~~：已归因 —— 每卡 `DropShadowEffect` + WPF 的 D3D 管线。改为**共享 1× 阴影位图 + `SoftwareOnly`** 后，空载私有工作集 28MB、挂满 12 张 36MB（详见 R9 与 `spike/README.md`）。
 6. 门禁全绿后，按 §6 建 `src/` 骨架：把 spike 的 `Native/Zone/PrivacyGate/ClipboardWatcher` 直接迁进 `Win32/` 与 `Capture/`，其余重写。
 7. **分发链路按 §6.1 落地**：M1 先做"self-contained 单文件 + 用户级 Inno 安装 + 托盘退出 + 卸载清 `%LOCALAPPDATA%\Clipline\`"，签名与自动更新留到 M2；更新必须是用户显式动作，不能后台拉包（零网络原则）。
 8. 任一门禁不过 → 回到 §4 重估栈（尤其 R1/R2 失败时，Win32 分层窗口自绘或 C++/WinRT 路线要重新摆上桌）。

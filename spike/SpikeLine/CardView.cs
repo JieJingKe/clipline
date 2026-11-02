@@ -4,6 +4,7 @@ using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Media.Animation;
 using System.Windows.Media.Effects;
+using System.Windows.Media.Imaging;
 
 namespace Clipline.Spike;
 
@@ -246,26 +247,98 @@ internal sealed class CardView : Grid
 /// </summary>
 internal static class KraftPaper
 {
+    /// <summary>阴影留白（DIP）：模糊半径 14 + 偏移 2 之外再留一点余量，否则边缘会被切平。</summary>
+    private const double ShadowPadding = 20;
+
+    /// <summary>
+    /// 阴影位图按 1× 烘：它本来就是模糊的，放大看不出差别；而 2× 源图会让 WPF 给每张卡再开
+    /// 一块缩放表面，11 张卡实测多占 16MB（1× 只多 1.2MB，见 spike/README R9）。
+    /// </summary>
+    private const double ShadowScale = 1.0;
+
     public static readonly Brush Background = CreateBackground();
     public static readonly Brush Edge = Freeze(new SolidColorBrush(Color.FromArgb(0xB4, 0xC9, 0xAE, 0x86)));
     public static readonly Brush Ink = Freeze(new SolidColorBrush(Color.FromRgb(0x33, 0x22, 0x11)));
 
-    public static Border BuildCard(UIElement content) => new()
+    /// <summary>
+    /// 所有卡片共用的阴影位图。每个 <see cref="DropShadowEffect"/> 都要一块窗口大小的中间表面：
+    /// 实测 11 张卡多占约 38MB private bytes（见 spike/README R9）。改成启动时离屏烘一张
+    /// ~0.16MB 的位图，每张卡只贴一次图，观感不变。
+    /// </summary>
+    private static readonly BitmapSource ShadowBitmap = CreateShadowBitmap();
+
+    public static UIElement BuildCard(UIElement content)
     {
-        CornerRadius = new CornerRadius(8),
-        BorderThickness = new Thickness(1),
-        BorderBrush = Edge,
-        Background = Background,
-        Effect = new DropShadowEffect
+        var shadow = new Image
         {
-            BlurRadius = 14,
-            ShadowDepth = 2,
-            Opacity = 0.28,
-            Color = Color.FromRgb(0x4A, 0x3B, 0x2A),
-        },
-        Padding = new Thickness(8),
-        Child = content,
-    };
+            Source = ShadowBitmap,
+            Width = LineWindow.CardWidth + ShadowPadding * 2,
+            Height = LineWindow.CardHeight + ShadowPadding * 2,
+            Margin = new Thickness(-ShadowPadding),
+            HorizontalAlignment = HorizontalAlignment.Left,
+            VerticalAlignment = VerticalAlignment.Top,
+            Stretch = Stretch.Fill,
+            // 阴影留白不能吃点击：卡片之间的空隙被它盖住会误触复制。
+            IsHitTestVisible = false,
+        };
+        RenderOptions.SetBitmapScalingMode(shadow, BitmapScalingMode.HighQuality);
+
+        var card = new Border
+        {
+            CornerRadius = new CornerRadius(8),
+            BorderThickness = new Thickness(1),
+            BorderBrush = Edge,
+            Background = Background,
+            Padding = new Thickness(8),
+            Child = content,
+        };
+
+        var host = new Grid();
+        host.Children.Add(shadow);
+        host.Children.Add(card);
+        return host;
+    }
+
+    private static BitmapSource CreateShadowBitmap()
+    {
+        var width = LineWindow.CardWidth + ShadowPadding * 2;
+        var height = LineWindow.CardHeight + ShadowPadding * 2;
+
+        // 用和卡片同样的纸色当剪影：位图中央会被卡片盖住，万一透出一点也不至于把纸面压暗。
+        var silhouette = new Border
+        {
+            Width = LineWindow.CardWidth,
+            Height = LineWindow.CardHeight,
+            CornerRadius = new CornerRadius(8),
+            Background = Background,
+            HorizontalAlignment = HorizontalAlignment.Left,
+            VerticalAlignment = VerticalAlignment.Top,
+            Margin = new Thickness(ShadowPadding),
+            Effect = new DropShadowEffect
+            {
+                BlurRadius = 14,
+                ShadowDepth = 2,
+                Opacity = 0.28,
+                Color = Color.FromRgb(0x4A, 0x3B, 0x2A),
+            },
+        };
+
+        var host = new Grid { Width = width, Height = height };
+        host.Children.Add(silhouette);
+        host.Measure(new Size(width, height));
+        host.Arrange(new Rect(0, 0, width, height));
+        host.UpdateLayout();
+
+        var bitmap = new RenderTargetBitmap(
+            (int)Math.Ceiling(width * ShadowScale),
+            (int)Math.Ceiling(height * ShadowScale),
+            96 * ShadowScale,
+            96 * ShadowScale,
+            PixelFormats.Pbgra32);
+        bitmap.Render(host);
+        bitmap.Freeze();
+        return bitmap;
+    }
 
     private static Brush CreateBackground()
     {
