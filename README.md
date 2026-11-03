@@ -78,6 +78,8 @@ Then: push the cursor to the **middle of the top edge**, or click the **little c
 
 - 从托盘图标展开时，鼠标不在绳上，绳子会在短暂停留后自动收起 / opening from the tray auto-hides again after a moment, because the cursor isn't on the line
 - 文字卡拖出只对接收纯文本的目标有效，图片几乎到处都行 / dragging text works in targets that accept plain text; images work almost everywhere
+- **Win+V 里的旧内容搬不上来** —— Windows 自带的剪贴板历史里，点一条旧内容虽然能粘贴出来，但它不会挂到绳子上：系统在还原这类条目时会明确标记"不要给剪贴板监视工具看"，我们尊重这个标记。想把旧内容搬上绳，可以先粘到输入框，再在那里 `Ctrl+A`、`Ctrl+C` 复制一次。绳子上的记录从启动那一刻开始算，启动时会把剪贴板里当时的那一条挂上去。
+  **Old items from Win+V won't land on the line** — selecting an item in Windows' own clipboard history does paste it, but it won't hang on the line: Windows explicitly marks restored items as "don't show this to clipboard monitors", and we honour that mark. To bring an old item across, paste it first, then select and copy it again. The line's own history starts when Clipline starts, plus whatever was already on the clipboard at launch.
 
 ## 文档 · Documentation
 

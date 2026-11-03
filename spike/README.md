@@ -30,6 +30,17 @@ cd spike/SpikeLine
 ./bin/Debug/net10.0-windows/CliplineSpike.exe --quit-after 3000                      # 自检用：跑 3 秒后正常退出，不必杀进程
 ```
 
+发布产物统一放在仓库根的 `dist/`（已 gitignore，不进版本库）：
+
+```sh
+cd spike/SpikeLine
+"$DN" publish -c Release -r win-x64 --self-contained true \
+  -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtraction=true \
+  -p:EnableCompressionInSingleFile=true -o ../../dist/Clipline-0.1.0-win-x64
+```
+
+产物 = 单文件 `CliplineSpike.exe` + 5 个 WPF 原生 DLL + `README.txt`；发布 zip 也放在 `dist/` 下。若正在运行的实例锁住了 `bin/`，把源码复制到临时目录再 publish，最后仍需把产物拷回 `dist/`。
+
 快捷键：`Ctrl+Alt+T` 开关绳子；`Ctrl+Alt+L` 运行时开关顶边下拉绳（与托盘菜单里的"显示下拉绳"同一条开关）；`Ctrl+Alt+Shift+Q` 退出。
 托盘：图标在右下角通知区（Win11 默认收在 `^` 折叠区里，可拖出固定），左键/双击开关绳子，右键菜单 = 显示/收起绳子 · 显示下拉绳（带勾选） · 使用小 tips · 中文 / English（带勾选） · 退出 Clipline。
 语言：托盘菜单里勾选即实时切换（卡片文案、右键菜单、引导气泡、托盘提示全部跟着变），选择写入 `%LOCALAPPDATA%\CliplineSpike\language.txt`；没有这个文件时跟随系统界面语言（`zh` 开头 → 中文，其余 → 英文）。
